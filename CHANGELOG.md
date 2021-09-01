@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/brevdev/vault-utils/compare/v0.1.0...HEAD)
 
+### Changed
+
+- Replaced template readme with vault-utils readme
+
 ## [0.1.0](https://github.com/brevdev/vault-utils/releases/tag/v0.1.0)
 
 ### Added 
