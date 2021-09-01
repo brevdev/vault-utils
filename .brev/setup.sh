@@ -38,8 +38,8 @@ echo "##### Golang v16x #####"
 wget https://golang.org/dl/go1.16.7.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.16.7.linux-amd64.tar.gz
 echo "" | sudo tee -a ~/.zshrc
-echo "export PATH=\$PATH:/home/brev/lib/go/bin" | sudo tee -a ~/.zshrc
-echo "export GOPATH=/home/brev/lib/go" | sudo tee -a ~/.zshrc
+echo "export PATH=\$PATH:/home/brev/go/bin" | sudo tee -a ~/.zshrc
+echo "export GOPATH=/home/brev/go" | sudo tee -a ~/.zshrc
 echo "export TMPDIR=/home/brev/tmp" | sudo tee -a ~/.zshrc
 source ~/.zshrc
 rm go1.16.7.linux-amd64.tar.gz

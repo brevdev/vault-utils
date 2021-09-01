@@ -1,13 +1,27 @@
 package main
 
-import (
-	"testing"
+// func Test_restartSystemdExists(t *testing.T) {
+// 	exec.Command("cp", "fixtures/test.service", "/etc/systemd/system")
+// 	err := restartSystemdService("test.service")
+// 	assert.Nil(t, err)
+// }
 
-	"github.com/stretchr/testify/assert"
-)
+// func Test_restartSystemdDoesntExist(t *testing.T) {
+// 	err := restartSystemdService("dne.service")
+// 	assert.Error(t, err)
+// }
 
-func Test_greet(t *testing.T) {
-	got := greet()
+// func Test_fileChanges(t *testing.T) {
+// 	err := restartSystemdService("")
+// 	assert.Nil(t, err)
+// }
 
-	assert.Equal(t, "Hi!", got, "should properly greet")
-}
+// func Test_fileDoesntExist(t *testing.T) {
+// 	err := restartSystemdService("")
+// 	assert.Nil(t, err)
+// }
+
+// func Test_fileIsDeleted(t *testing.T) {
+// 	err := restartSystemdService("")
+// 	assert.Nil(t, err)
+// }
