@@ -19,7 +19,7 @@ Restart systemd service on file change
 ## Usage
 `Needs root access`
 
-1. make build
+1. `make build`
 2. `sudo ./dist/vault-utils_linux_amd64/vault-utils -service=${SERVICE} -configPath=${CONFIG}`
 
 ## Contributing
