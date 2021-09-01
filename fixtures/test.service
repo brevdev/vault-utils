@@ -1,0 +1,8 @@
+[Unit]
+Description=example systemd service unit file.
+
+[Service]
+ExecStart=echo 1
+
+[Install]
+WantedBy=multi-user.target

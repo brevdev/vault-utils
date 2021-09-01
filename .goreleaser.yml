@@ -5,9 +5,9 @@ builds:
 - env:
     - CGO_ENABLED=0
   goos:
-    - darwin
+    # - darwin
     - linux
-    - windows
+    # - windows
   goarch:
     - amd64
 archives:
@@ -21,10 +21,10 @@ dockers:
   - binaries:
     - "{{ .ProjectName }}"
     image_templates:
-    - "docker.pkg.github.com/golang-templates/seed/{{ .ProjectName }}:latest"
-    - "docker.pkg.github.com/golang-templates/seed/{{ .ProjectName }}:{{ .Major }}"
-    - "docker.pkg.github.com/golang-templates/seed/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}"
-    - "docker.pkg.github.com/golang-templates/seed/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
+    - "docker.pkg.github.com/brevdev/vault-utils/{{ .ProjectName }}:latest"
+    - "docker.pkg.github.com/brevdev/vault-utils/{{ .ProjectName }}:{{ .Major }}"
+    - "docker.pkg.github.com/brevdev/vault-utils/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}"
+    - "docker.pkg.github.com/brevdev/vault-utils/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
     build_flag_templates:
     - "--pull"
     - "--label=org.opencontainers.image.created={{.Date}}"
