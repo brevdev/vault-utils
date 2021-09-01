@@ -43,3 +43,6 @@ echo "export GOPATH=/home/brev/go" | sudo tee -a ~/.zshrc
 echo "export TMPDIR=/home/brev/tmp" | sudo tee -a ~/.zshrc
 source ~/.zshrc
 rm go1.16.7.linux-amd64.tar.gz
+code-server --install-extension golang.go
+
+sudo cp fixtures/test.serice /etc/systemd/system/
