@@ -1,14 +1,17 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
+	"crypto/md5" //nolint // using md5 for simple hash
+
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/pkg/errors"
@@ -78,7 +81,8 @@ func run(c *config) error {
 	log.Info("running...")
 	lastRestart := &restartConfig{LastRestart: &time.Time{}, ThrottleThresh: time.Second}
 	restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart)
-	err := onChange(c.ConfigFilePath, func() { restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart) })
+	pollTime := 2 * time.Second //nolint // 2 seconds
+	err := onChange(c.ConfigFilePath, func() { restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart) }, pollTime)
 	if err != nil {
 		return wrapAndTrace(err)
 	}
@@ -110,7 +114,7 @@ func restartSystemdServiceThrottledAndLog(systemdService string, config *restart
 }
 
 func restartSystemdService(systemdService string) error {
-	log.Info("restarting vault")
+	log.Infof("restarting %s", systemdService)
 	cmd := exec.Command("systemctl", "restart", systemdService) //nolint // accepting vul risk
 	if stdout, err := cmd.CombinedOutput(); err != nil {
 		return wrapAndTrace(err, string(stdout))
@@ -119,35 +123,33 @@ func restartSystemdService(systemdService string) error {
 	return nil
 }
 
-func onChange(configFilePath string, action func()) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return wrapAndTrace(err)
-	}
-	defer checks(watcher.Close)
-
-	done := make(chan bool)
-
-	go func() {
-		for {
-			select {
-			// watch for events
-			case event := <-watcher.Events:
-				log.Tracef("EVENT %v\n", event)
-				action()
-			// watch for errors
-			case err := <-watcher.Errors:
-				log.Warnf("ERROR %v\n", err)
-			}
+func onChange(configFilePath string, action func(), pollTime time.Duration) error {
+	var hash string
+	for {
+		newHash, err := md5sum(configFilePath)
+		if err != nil {
+			return wrapAndTrace(err)
 		}
-	}()
-
-	if err := watcher.Add(configFilePath); err != nil {
-		return wrapAndTrace(err)
+		if hash != newHash {
+			action()
+		}
+		hash = newHash
+		time.Sleep(pollTime)
 	}
+}
 
-	<-done
-	return nil
+func md5sum(filePath string) (string, error) {
+	file, err := os.Open(filePath) //nolint // accepting risk of opening var path
+	if err != nil {
+		return "", err
+	}
+	defer checks(file.Close)
+
+	hash := md5.New() //nolint // not using md5 for anything cryptographically important
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func wrapAndTrace(err error, messages ...string) error {
