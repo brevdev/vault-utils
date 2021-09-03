@@ -3,11 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	validation "github.com/go-ozzo/ozzo-validation/v4"
+	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -15,24 +18,44 @@ import (
 type config struct {
 	SystemdService string
 	ConfigFilePath string
-	LogLevel       log.Level
+	LogLevel       LogLevel
+}
+
+func (c config) Validate() error {
+	return validation.ValidateStruct(&c,
+		validation.Field(&c.SystemdService, validation.Required),
+		validation.Field(&c.ConfigFilePath, validation.Required, is.RequestURI),
+		validation.Field(&c.LogLevel),
+	)
+}
+
+// LogLevel error, warn, info, debug, etc.
+type LogLevel string
+
+// Validate checks if log is proper.
+func (l LogLevel) Validate() error {
+	_, err := log.ParseLevel(string(l))
+	return err
 }
 
 func main() {
 	c, err := getConfig()
 	if err != nil {
-		panic(err)
+		log.Error(err)
+		os.Exit(1)
 	}
 
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp:   true,
 		TimestampFormat: time.RFC3339,
 	})
-	log.SetLevel(c.LogLevel)
 
-	err = run(c)
-	if err != nil {
-		panic(err)
+	level, _ := log.ParseLevel(string(c.LogLevel)) // validation already has taken place
+	log.SetLevel(level)
+
+	if err = run(c); err != nil {
+		log.Error(err)
+		os.Exit(1)
 	}
 }
 
@@ -42,20 +65,13 @@ func getConfig() (*config, error) {
 	logLevel := flag.String("logLevel", "info", "Ex: trace, debug, info, warn, error")
 	flag.Parse()
 
-	if *systemdService == "" {
-		return nil, fmt.Errorf("service must be provided")
+	c := config{SystemdService: *systemdService, ConfigFilePath: *configFilePath, LogLevel: LogLevel(*logLevel)}
+
+	if err := c.Validate(); err != nil {
+		return nil, err
 	}
 
-	if *configFilePath == "" {
-		return nil, fmt.Errorf("configPath must be provided")
-	}
-
-	l, err := log.ParseLevel(*logLevel)
-	if err != nil {
-		return nil, wrapAndTrace(err)
-	}
-
-	return &config{SystemdService: *systemdService, ConfigFilePath: *configFilePath, LogLevel: l}, nil
+	return &c, nil
 }
 
 func run(c *config) error {
@@ -96,7 +112,7 @@ func restartSystemdServiceThrottledAndLog(systemdService string, config *restart
 func restartSystemdService(systemdService string) error {
 	log.Info("restarting vault")
 	cmd := exec.Command("systemctl", "restart", systemdService) //nolint // accepting vul risk
-	if stdout, err := cmd.Output(); err != nil {
+	if stdout, err := cmd.CombinedOutput(); err != nil {
 		return wrapAndTrace(err, string(stdout))
 	}
 
