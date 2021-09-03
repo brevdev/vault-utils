@@ -1,30 +1,37 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
+	"crypto/md5" //nolint // using md5 for simple hash
+
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
-type config struct {
+// Config is the parameters that configures vault-utils.
+type Config struct {
 	SystemdService string
 	ConfigFilePath string
+	PollTime       Duration // in seconds
 	LogLevel       LogLevel
 }
 
-func (c config) Validate() error {
+// Validate is the config validator.
+func (c Config) Validate() error {
 	return validation.ValidateStruct(&c,
 		validation.Field(&c.SystemdService, validation.Required),
 		validation.Field(&c.ConfigFilePath, validation.Required, is.RequestURI),
+		validation.Field(&c.PollTime),
 		validation.Field(&c.LogLevel),
 	)
 }
@@ -35,6 +42,15 @@ type LogLevel string
 // Validate checks if log is proper.
 func (l LogLevel) Validate() error {
 	_, err := log.ParseLevel(string(l))
+	return err
+}
+
+// Duration 1s, 1hr etc.
+type Duration string
+
+// Validate checks if log is proper.
+func (d Duration) Validate() error {
+	_, err := time.ParseDuration(string(d))
 	return err
 }
 
@@ -59,13 +75,15 @@ func main() {
 	}
 }
 
-func getConfig() (*config, error) {
+func getConfig() (*Config, error) {
 	systemdService := flag.String("service", "", "The systemd service to restart")
 	configFilePath := flag.String("configPath", "", "Path to config file to watch")
 	logLevel := flag.String("logLevel", "info", "Ex: trace, debug, info, warn, error")
+	pollTime := flag.String("pollTime", "2s", "int in seconds")
+
 	flag.Parse()
 
-	c := config{SystemdService: *systemdService, ConfigFilePath: *configFilePath, LogLevel: LogLevel(*logLevel)}
+	c := Config{SystemdService: *systemdService, ConfigFilePath: *configFilePath, LogLevel: LogLevel(*logLevel), PollTime: Duration(*pollTime)}
 
 	if err := c.Validate(); err != nil {
 		return nil, err
@@ -74,11 +92,14 @@ func getConfig() (*config, error) {
 	return &c, nil
 }
 
-func run(c *config) error {
+func run(c *Config) error {
 	log.Info("running...")
 	lastRestart := &restartConfig{LastRestart: &time.Time{}, ThrottleThresh: time.Second}
 	restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart)
-	err := onChange(c.ConfigFilePath, func() { restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart) })
+
+	pollTime, _ := time.ParseDuration(string(c.PollTime)) // validation already happened
+
+	err := onChange(c.ConfigFilePath, func() { restartSystemdServiceThrottledAndLog(c.SystemdService, lastRestart) }, pollTime)
 	if err != nil {
 		return wrapAndTrace(err)
 	}
@@ -110,7 +131,7 @@ func restartSystemdServiceThrottledAndLog(systemdService string, config *restart
 }
 
 func restartSystemdService(systemdService string) error {
-	log.Info("restarting vault")
+	log.Infof("restarting %s", systemdService)
 	cmd := exec.Command("systemctl", "restart", systemdService) //nolint // accepting vul risk
 	if stdout, err := cmd.CombinedOutput(); err != nil {
 		return wrapAndTrace(err, string(stdout))
@@ -119,35 +140,33 @@ func restartSystemdService(systemdService string) error {
 	return nil
 }
 
-func onChange(configFilePath string, action func()) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return wrapAndTrace(err)
-	}
-	defer checks(watcher.Close)
-
-	done := make(chan bool)
-
-	go func() {
-		for {
-			select {
-			// watch for events
-			case event := <-watcher.Events:
-				log.Tracef("EVENT %v\n", event)
-				action()
-			// watch for errors
-			case err := <-watcher.Errors:
-				log.Warnf("ERROR %v\n", err)
-			}
+func onChange(configFilePath string, action func(), pollTime time.Duration) error {
+	var hash string
+	for {
+		newHash, err := md5sum(configFilePath)
+		if err != nil {
+			return wrapAndTrace(err)
 		}
-	}()
-
-	if err := watcher.Add(configFilePath); err != nil {
-		return wrapAndTrace(err)
+		if hash != newHash {
+			action()
+		}
+		hash = newHash
+		time.Sleep(pollTime)
 	}
+}
 
-	<-done
-	return nil
+func md5sum(filePath string) (string, error) {
+	file, err := os.Open(filePath) //nolint // accepting risk of opening var path
+	if err != nil {
+		return "", err
+	}
+	defer checks(file.Close)
+
+	hash := md5.New() //nolint // not using md5 for anything cryptographically important
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func wrapAndTrace(err error, messages ...string) error {

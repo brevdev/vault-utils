@@ -14,7 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Swapping fsnotify with custom hash based poller since mounted volume updates do not trigger fsnotify
+- Replacing golint with revive
 - Replaced template readme with vault-utils readme
+
+### Removed
+
+- CI builds with mac and windows
 
 ## [0.1.0](https://github.com/brevdev/vault-utils/releases/tag/v0.1.0)
 
